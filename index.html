@@ -16,6 +16,7 @@
   .screen.show { display: flex; }
   .screen.dim { background: rgba(8, 12, 30, .55); backdrop-filter: blur(3px); }
   #daily, #history { z-index: 20; }
+  #updating { z-index: 30; }
   #login, #menu, #avatar { background: #000; }
   body.kids #menu, body.kids #avatar { background: radial-gradient(circle at 25% 15%, #3f7fe0 0%, #23358f 45%, #0c1238 100%); }
   #login .lang-login { position: absolute; top: 16px; right: 16px; }
@@ -157,6 +158,19 @@
     background: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.5); display: none; }
   .crosshair.show { display: block; }
 
+  /* обновление и светлая тема */
+  .primary-update { background: #00b06b; color: #fff; box-shadow: 0 4px 0 #00804d; }
+  .update-bar { height: 16px; background: #eef1f7; border-radius: 8px; overflow: hidden; }
+  #updateFill { height: 100%; width: 0; background: linear-gradient(90deg, #00b06b, #ffc83d); }
+  #updateFill.go { width: 100%; transition: width 3s linear; }
+  body.light #login, body.light #menu, body.light #avatar { background: #eef1f6; color: #1d2433; }
+  body.light.kids #menu, body.light.kids #avatar { background: radial-gradient(circle at 25% 15%, #e3f0ff 0%, #b9d8ff 55%, #8fc1ff 100%); }
+  body.light .topbar { background: rgba(255,255,255,.8); }
+  body.light .chip:not(.bucks) { background: rgba(0,0,0,.07); }
+  body.light .ed-info, body.light .av-preview { background: #fff; border-color: rgba(0,0,0,.1); }
+  body.light .gchip { color: #1d2433; border-color: rgba(0,0,0,.25); }
+  body.light .gchip.on { background: #1d2433; color: #fff; border-color: #1d2433; }
+
   /* history */
   .history { width: min(640px, 94vw); max-height: 88vh; display: flex; flex-direction: column; gap: 12px; }
   .hist-head { display: flex; align-items: center; justify-content: space-between; }
@@ -275,6 +289,8 @@
     <div class="spacer"></div>
     <div id="bucks" class="chip bucks"></div>
     <button id="dailyBtn" class="btn small gold"><span data-en="🎁 Reward">🎁 Награда</span><span id="dailyDot" class="dot"></span></button>
+    <button id="updateBtn" class="btn small primary-update" data-en="🔄 Update app">🔄 Обновить приложение</button>
+    <button id="themeBtn" class="btn small" hidden></button>
     <button id="historyBtn" class="btn small" data-en="🕘 History">🕘 История</button>
     <button id="avatarBtn" class="btn small" data-en="👕 Avatar & Shop">👕 Аватар и магазин</button>
     <div id="userChip" class="chip"></div>
@@ -400,6 +416,13 @@
   </div>
 </div>
 
+<div id="updating" class="screen dim">
+  <div class="panel center">
+    <h2 data-en="🔄 Updating the app…">🔄 Обновляем приложение…</h2>
+    <div class="update-bar"><div id="updateFill"></div></div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script type="module">
@@ -429,9 +452,184 @@ function rng(seed) {
 // ---------------------------------------------------------------------------
 // Язык: по умолчанию английский, можно переключить на русский
 // ---------------------------------------------------------------------------
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+// После кнопки «Обновить приложение» появляются смена темы и китайский язык.
+let updated = store.get('bworld_updated') === '1';
+let theme = store.get('bworld_theme') === 'light' ? 'light' : 'dark';
 let lang = 'en';
-try { if (localStorage.getItem('bworld_lang') === 'ru') lang = 'ru'; } catch (e) {}
-const T = (ru, en) => (lang === 'ru' ? ru : en);
+const savedLang = store.get('bworld_lang');
+if (savedLang === 'ru' || (savedLang === 'zh' && updated)) lang = savedLang;
+// Китайский перевод: ключ — английский текст. {0}, {1} — подставляемые значения.
+const ZH = {
+  // экраны
+  "Sign in to bworld": "登录 bworld", "Play": "开始游戏", "Maps": "地图",
+  "Single-player only — no online, no other players.": "仅限单人游戏——不联网,没有其他玩家。",
+  "🕘 History": "🕘 历史", "👕 Avatar & Shop": "👕 形象与商店", "Log out": "退出登录", "← Back": "← 返回", "Avatar & Shop": "形象与商店",
+  "Hold and drag to rotate": "按住并拖动来旋转",
+  "B Backs are earned only in the game — from daily rewards and finishing maps. No real money needed.": "B Backs 只能在游戏中获得——来自每日奖励和完成地图。不需要真钱。",
+  "☰ Menu": "☰ 菜单", "Paused": "已暂停", "Resume": "继续", "Restart": "重新开始", "Back to menu": "返回菜单", "Play again": "再玩一次", "Menu": "菜单",
+  "🎁 Daily reward": "🎁 每日奖励", "Close": "关闭", "🏎️ Pick your car": "🏎️ 选择你的车",
+  "Race through the city, weave past traffic and drive through every gate to the finish.": "在城市中飞驰,穿过车流,通过每一道大门直达终点。",
+  "← Menu": "← 菜单", "📟 Intercom": "📟 门禁对讲", "🔔 Call": "🔔 呼叫", "🔑 Key": "🔑 钥匙",
+  "Flats 1–36 in this entrance. Yours is No. 36 on floor 9. Door code: 2580": "这个单元有 1–36 号房。你的是 9 楼 36 号。门禁密码:2580",
+  "🛗 Elevator": "🛗 电梯", "🕘 Game history": "🕘 游戏历史", "Clear history": "清除历史", "Nickname": "昵称", "Date of birth": "出生日期",
+  "e.g. BronyaPro": "例如 BronyaPro", "🔍 Search maps…": "🔍 搜索地图…", "under 9": "9 岁以下", "9 to 12": "9 到 12 岁", "13 and older": "13 岁及以上", "🎁 Reward": "🎁 奖励",
+  "☀️ Light theme": "☀️ 浅色主题", "🌙 Dark theme": "🌙 深色主题",
+
+  // версии, рейтинги, жанры
+  "Killing": "杀戮", "Bad words": "脏话", "Swearing": "粗口",
+  "Maps with bad words, swearing and killing are locked.": "含有脏话、粗口和杀戮的地图已锁定。", "Maps with swearing are locked.": "含有粗口的地图已锁定。", "All maps are available.": "所有地图均可游玩。",
+  "🏃 Obby": "🏃 障碍跑", "🏎️ Racing": "🏎️ 竞速", "🏠 Life": "🏠 生活", "⚔️ Battles": "⚔️ 战斗", "For all": "所有人",
+
+  // темы
+  "Rainbow": "彩虹", "Lava": "熔岩", "Space": "太空", "Candy": "糖果", "Ice": "冰雪", "Beach": "海滩", "Jungle": "丛林", "Desert": "沙漠", "Farm": "农场", "Neon": "霓虹",
+  "Underwater": "水下", "Cloud": "云朵", "Chocolate": "巧克力", "Toxic": "剧毒", "Autumn": "秋日", "Night": "夜晚", "Pixel": "像素", "Crystal": "水晶", "Brick": "积木", "Sunset": "日落",
+  "over the ocean": "海洋上空", "above a sea of lava": "熔岩之海上空", "among the stars in low gravity": "低重力星空中", "over a milk river": "牛奶河上空", "above a frozen lake": "冰湖上空",
+  "over the warm sea": "温暖海面上空", "over a jungle swamp": "丛林沼泽上空", "above quicksand": "流沙上空", "over a muddy puddle": "泥坑上空", "in a glowing city": "发光的城市里", "on the ocean floor": "海底",
+  "high in the clouds": "高高的云端", "over a chocolate river": "巧克力河上空", "above an acid lake": "酸液湖上空", "among falling leaves": "落叶之中", "under a starry sky": "星空下", "in a retro game world": "复古游戏世界里",
+  "in a crystal cave": "水晶洞穴里", "made of colorful cubes": "彩色方块搭成", "at sunset": "日落时分",
+  "{0} Obby: Easy": "{0}障碍跑:简单", "{0} Obby: Hardcore": "{0}障碍跑:硬核", "{0} Tower": "{0}塔", "{0} Trampolines": "{0}蹦床",
+  "A simple obby {0}. Great for warming up!": "{0}的简单障碍跑,非常适合热身!",
+  "Narrow platforms, long jumps and traps {0}. For pros only!": "{0}的窄平台、远跳和陷阱。仅限高手!",
+  "A tall spiral tower {0}. Climb to the very top!": "{0}的高大螺旋塔。爬到最顶端吧!",
+  "Trampolines launch you high {0}. Fly to the finish!": "{0}的蹦床把你高高弹起。飞向终点吧!",
+
+  // карты
+  "Traffic Weave": "车流穿梭", "Race through the city, weave past traffic and drive through every gate to the finish. You pick the car!": "在城市中飞驰,穿过车流,通过每一道大门直达终点。车由你选!",
+  "Sunny Heights": "阳光小区", "An apartment complex with a working elevator and intercom. Open the entrance, ride to floor 9 and enter your flat No. 36.": "带有真实电梯和门禁对讲的住宅小区。打开单元门,坐电梯到 9 楼,走进你的 36 号房。",
+  "Rainbow Obby": "彩虹障碍跑", "Parkour across floating platforms over the ocean. Grab the stars and reach the flag!": "在海洋上空的浮动平台上跑酷。收集星星,抵达旗帜!",
+  "Lava Obby": "熔岩障碍跑", "Platforms above a sea of lava. Don't step on the glowing strips!": "熔岩之海上空的平台。别踩发光的条带!",
+  "Space Obby": "太空障碍跑", "Low gravity! Leap far between asteroids among the stars.": "低重力!在星空中的小行星之间远跳。",
+  "Candy Obby": "糖果障碍跑", "Sweet platforms of jelly and marshmallow over a milk river.": "牛奶河上空由果冻和棉花糖做成的甜蜜平台。",
+  "Sky Tower": "天空之塔", "Climb the spiral around a huge tower all the way to the clouds.": "沿着巨塔的螺旋一路爬上云端。",
+  "Maze": "迷宫", "Living hedges and twisty corridors. Find the way out to the flag; stars in dead ends are a bonus.": "绿篱和曲折的走廊。找到通往旗帜的出口,死路里的星星是奖励。",
+  "Trampoline Park": "蹦床公园", "Blue trampolines launch you to the next platforms.": "蓝色蹦床把你弹向下一个平台。",
+  "Winter Forest": "冬日森林", "An obby on snowy platforms among fir trees. It is snowing!": "杉树间积雪平台上的障碍跑。正在下雪!",
+  "Sunny Beach": "阳光海滩", "Jump over wooden piers and palm islands above the sea.": "跳过海面上的木栈桥和棕榈小岛。",
+  "Happy Farm": "快乐农场", "An obby of hay bales and barns over a huge muddy puddle.": "大泥坑上空由干草捆和谷仓组成的障碍跑。",
+  "Pyramids": "金字塔", "Stone blocks of ancient pyramids over quicksand.": "流沙上空古老金字塔的石块。",
+  "Zombie Arena": "僵尸竞技场", "A night arena. Grab a sword and fight waves of zombies.": "夜晚的竞技场。拿起剑,迎战一波波僵尸。",
+  "Robot War": "机器人大战", "A neon arena and a laser sword against an army of robots.": "霓虹竞技场,用激光剑对抗机器人大军。",
+  "Pirate Boarding": "海盗登船", "Pirates climb aboard from both ends of the ship. Fight them off!": "海盗从船的两端爬上来。把他们打退!",
+  "Skeleton Castle": "骷髅城堡", "Skeletons rise in the yard of an old castle. Survive three waves.": "骷髅在古堡庭院中复活。坚持三波。",
+  "Grumpy Market": "暴躁市场", "An obby above market stalls. Vendors call everyone names as they jump past.": "市场摊位上空的障碍跑。摊贩会骂每个跳过的人。",
+  "Hooligan City": "流氓之城", "An obby over the rooftops of a city where hooligans swear and spray graffiti.": "在城市屋顶上的障碍跑,这里的流氓说粗口、喷涂鸦。",
+  "Night Garages": "夜间车库", "An obby over garage roofs at night. The guys below swear a lot.": "夜晚车库屋顶上的障碍跑。下面的人总说粗口。",
+  "Desert Zombies": "沙漠僵尸", "Zombies crawl out of the sand under the blazing sun.": "烈日下,僵尸从沙子里爬出来。",
+  "Ice Invasion": "冰雪入侵", "Frozen zombies creep across a snowy arena.": "冰冻僵尸爬过雪地竞技场。",
+  "Ninja Dojo": "忍者道场", "Fast ninjas attack in an old dojo.": "敏捷的忍者在古老道场中发起攻击。",
+  "Jungle Ninjas": "丛林忍者", "Ninjas hide among the jungle trees.": "忍者藏在丛林的树木之间。",
+  "Alien Attack": "外星人来袭", "A low-gravity space station has been taken over by aliens.": "低重力空间站被外星人占领了。",
+  "Aliens on the Farm": "农场外星人", "A UFO dropped aliens right in the middle of the farm!": "飞碟把外星人投放到了农场中央!",
+  "Mummy Tomb": "木乃伊墓穴", "Slow but stubborn mummies wake up in a dark tomb.": "缓慢而顽强的木乃伊在黑暗墓穴中醒来。",
+  "Goblin Cave": "哥布林洞穴", "Nimble goblins rush out of a dark cave.": "灵活的哥布林冲出黑暗的洞穴。",
+  "Angry Snowmen": "愤怒的雪人", "Snowmen in top hats came alive and are very angry.": "戴礼帽的雪人活了过来,而且非常生气。",
+  "Vampire Castle": "吸血鬼城堡", "At night, caped vampires come up from the castle cellars.": "夜晚,披斗篷的吸血鬼从城堡地窖里出来。",
+  "Knight Tournament": "骑士比武", "Dark knights in horned helmets challenge you to a fight.": "戴角盔的黑暗骑士向你发起挑战。",
+  "Robot Factory": "机器人工厂", "A broken factory keeps building robots one after another.": "失控的工厂不停地制造机器人。",
+  "Bully Yard": "恶霸院子", "An obby across a yard where bullies call everyone names.": "穿过院子的障碍跑,恶霸在这里骂所有人。",
+  "School of Rude": "粗鲁学校", "An obby over school desks. Slackers tease and call you names.": "课桌上的障碍跑。差生会取笑你、骂你。",
+  "Grumpy Park": "牢骚公园", "An autumn park where grumps on benches mutter mean words.": "秋天的公园,长椅上的牢骚鬼嘀咕着难听的话。",
+  "Angry Canteen": "愤怒食堂", "Jump across the tables while angry cooks yell.": "在餐桌间跳跃,愤怒的厨师在大喊。",
+  "Construction Site": "建筑工地", "An obby on steel beams. The builders swear.": "钢梁上的障碍跑。工人们说粗口。",
+  "Train Station": "火车站", "A night station: jump over train roofs while porters swear.": "夜晚的车站:在车顶上跳跃,搬运工说粗口。",
+  "Apartment Stairwell": "公寓楼梯间", "An obby up the stairwell. The neighbors swear.": "沿楼梯间而上的障碍跑。邻居们说粗口。",
+  "Auto Shop": "汽修店", "Jump over the auto shop lifts while mechanics swear.": "跳过汽修店的举升机,技工们说粗口。",
+
+  // NPC
+  "Hey, dummy, stop pushing!": "喂,笨蛋,别挤!", "Watch it, you clown!": "小心点,小丑!", "Are you stupid or what?": "你傻吗?", "Get lost, butterfingers!": "走开,笨手笨脚的!", "What a blockhead!": "真是个木头脑袋!",
+  "Out of the way, numbskull!": "让开,蠢货!", "Why are you just standing there, dimwit?": "傻站着干嘛,呆子?", "Open your eyes, you goof!": "睁开眼睛,傻瓜!", "You are such a noob!": "你真是个菜鸟!", "Fell again, klutz?": "又掉下去了,笨蛋?",
+  "Hey, @#$%, what are you doing here?": "喂,@#$%,你在这儿干嘛?", "Get out of here, #@$!": "滚开,#@$!", "@#$%! Fell again?": "@#$%!又掉下去了?", "What are you looking at, %&#@?": "看什么看,%&#@?", "Go home, $#@&!": "回家去,$#@&!",
+  "*#@! Stop pushing!": "*#@!别挤!", "%&#@! Just jump already!": "%&#@!快跳啊!", "You @#$% noob!": "你这个 @#$% 菜鸟!", "Who jumps like that, you #@$ fool?": "哪有这么跳的,#@$ 蠢货?",
+  "Vasya": "瓦夏", "Pete": "皮特", "Kolya": "科利亚", "Dima": "季马", "Alex": "亚历克斯", "Grey": "格雷", "Tolya": "托利亚", "Gena": "根纳", "Stas": "斯塔斯", "Mike": "迈克", "Val": "瓦尔", "Jack": "杰克",
+  "Bully": "恶霸", "Slacker": "差生", "Grump": "牢骚鬼", "Cook": "厨师", "Foreman": "工头", "Porter": "搬运工", "Neighbor": "邻居", "Mechanic": "技工",
+  "Vendor Zina": "摊贩吉娜", "Grandpa Max": "马克斯爷爷", "Seller Gosha": "卖家戈沙", "Aunt Val": "瓦尔阿姨", "Butcher Boris": "屠夫鲍里斯",
+  "Thug Vasya": "混混瓦夏", "Hooligan Pete": "流氓皮特", "Bully Kolya": "恶霸科利亚", "Rude Dima": "粗鲁的季马", "Brat Alex": "熊孩子亚历克斯", "Grump Grey": "牢骚鬼格雷",
+  "Uncle Tolya": "托利亚叔叔", "Mechanic Gena": "技工根纳", "Neighbor Vic": "邻居维克", "Biker Stas": "骑手斯塔斯", "Watchman Mike": "看门人迈克",
+  "DUMMY": "笨蛋", "NOOBS HERE": "菜鸟在此", "%&#@ OFF!": "%&#@ 滚开!", "LOSER": "失败者", "$#%& NOOB": "$#%& 菜鸟",
+
+  // враги и машины
+  "Zombie": "僵尸", "zombies": "僵尸", "Ice zombie": "冰僵尸", "ice zombies": "冰僵尸", "Robot": "机器人", "robots": "机器人", "Pirate": "海盗", "pirates": "海盗", "Skeleton": "骷髅", "skeletons": "骷髅",
+  "Ninja": "忍者", "ninjas": "忍者", "Alien": "外星人", "aliens": "外星人", "Mummy": "木乃伊", "mummies": "木乃伊", "Goblin": "哥布林", "goblins": "哥布林", "Angry snowman": "愤怒的雪人", "angry snowmen": "愤怒的雪人",
+  "Vampire": "吸血鬼", "vampires": "吸血鬼", "Dark knight": "黑暗骑士", "dark knights": "黑暗骑士",
+  "Sedan": "轿车", "Sports car": "跑车", "Jeep": "吉普车", "Taxi": "出租车", "Pickup": "皮卡", "Police": "警车",
+
+  // магазин
+  "No hat": "不戴帽子", "Cap": "鸭舌帽", "Party hat": "派对帽", "Top hat": "礼帽", "Headphones": "耳机", "Cowboy hat": "牛仔帽", "Viking helmet": "维京头盔", "Crown": "皇冠", "Halo": "光环",
+  "Smile": "微笑", "Happy": "开心", "Wink": "眨眼", "Cool shades": "酷墨镜", "Kitty": "小猫", "Star eyes": "星星眼",
+  "Nothing": "无", "Backpack": "背包", "Hero cape": "英雄斗篷", "Guitar": "吉他", "Jetpack": "喷气背包", "Wings": "翅膀",
+  "Fast sneakers": "飞速跑鞋", "Run 30% faster": "奔跑速度提高 30%", "Double jump": "二段跳", "Jump again in the air": "在空中再跳一次",
+  "🎨 Colors": "🎨 颜色", "🎩 Hats": "🎩 帽子", "🙂 Faces": "🙂 表情", "🎒 Accessories": "🎒 配饰", "⚡ Upgrades": "⚡ 升级",
+  "Skin": "皮肤", "Shirt": "上衣", "Pants": "裤子", "Custom color": "自定义颜色", "✓ On": "✓ 开启", "Off": "关闭", "✓ Equipped": "✓ 已穿戴", "Equip": "穿戴",
+  "You need {0} more B Backs. Claim daily rewards and finish maps!": "还差 {0} B Backs。领取每日奖励并完成地图吧!", "Bought: {0}!": "已购买:{0}!",
+
+  // вход, награды, меню, история
+  "Nickname: 3 to 20 characters (letters, digits, _).": "昵称:3 到 20 个字符(字母、数字、_)。", "Enter your real date of birth: day, month and year.": "请输入你的真实出生日期:年、月、日。",
+  "Hi, {0}! You are {1} — {2} is unlocked": "你好,{0}!你 {1} 岁——已解锁 {2}",
+  "Day {0}": "第 {0} 天", "Come back every day in a row and the reward grows! Today: <b>{0} B Backs</b>": "每天连续回来,奖励会越来越多!今天:<b>{0} B Backs</b>", "Claim": "领取",
+  "Today's reward is already claimed. Next one in about {0} h.": "今天的奖励已领取。下一次大约在 {0} 小时后。", "Already claimed": "已领取", "+{0} B Backs! Come back tomorrow for a new reward.": "+{0} B Backs!明天再来领新奖励。",
+  "age {0}": "{0} 岁", "Your version:": "你的版本:", "All": "全部", "🕘 Recent": "🕘 最近", "✅ Available": "✅ 可玩", "Maps found: {0} of {1}": "找到地图:{0} / {1}",
+  "You haven't played anything yet. Pick a map!": "你还没玩过任何地图。选一张吧!", "Nothing found 😕 Try another word.": "什么也没找到 😕 换个词试试。", "Free": "免费", "Reward for finishing": "完成奖励",
+  "Not available in": "不可用于", "This map has": "此地图含有", "Show more": "显示更多", "today": "今天", "yesterday": "昨天", "Games": "游戏次数", "Finished": "已完成", "Earned": "已赚取", "Favorite map": "最爱地图",
+  "✅ Finished": "✅ 已完成", "❌ Lost": "❌ 失败", "⏸ Not finished": "⏸ 未完成", "Not available in your version": "你的版本不可用", "Clear your whole game history?": "要清除全部游戏历史吗?",
+
+  // камера и подсказки
+  "Camera": "镜头", "third person": "第三人称", "first person": "第一人称", "top-down": "俯视", "This map is not available in your version": "你的版本无法游玩此地图", "Welcome to {0}!": "欢迎来到{0}!", " · C — camera": " · C — 镜头",
+  "WASD — move · Space — jump · Hold mouse or Q/E — camera · Wheel — zoom · Esc — menu": "WASD — 移动 · 空格 — 跳跃 · 按住鼠标或 Q/E — 镜头 · 滚轮 — 缩放 · Esc — 菜单",
+  "WASD — move · Space — jump · Click or F — sword · Hold mouse — camera · Esc — menu": "WASD — 移动 · 空格 — 跳跃 · 点击或 F — 挥剑 · 按住鼠标 — 镜头 · Esc — 菜单",
+  "W/S — gas and brake · A/D — steer · Space — handbrake · Mouse — look around · Esc — menu": "W/S — 油门和刹车 · A/D — 转向 · 空格 — 手刹 · 鼠标 — 环顾 · Esc — 菜单",
+  "WASD — move · E or click — intercom, elevator, doors · Mouse — camera · Esc — menu": "WASD — 移动 · E 或点击 — 对讲、电梯、门 · 鼠标 — 镜头 · Esc — 菜单",
+
+  // обби и джетпак
+  "Ouch, hot! Back to the checkpoint.": "哎呀,好烫!回到检查点。", "Oops! Back to the checkpoint.": "哎呀!回到检查点。", "Star collected!": "收集到星星!", "Checkpoint": "检查点", "Checkpoint {0} saved.": "检查点 {0} 已保存。",
+  "FINISH": "终点", "START": "起点", "Go up!": "向上!", "ENTRANCE": "入口", "Obby complete! 🏁": "障碍跑完成!🏁", "Stars: <b>{0} of {1}</b>": "星星:<b>{0} / {1}</b>",
+  "Buy jetpack": "购买喷气背包", "🚀 Jetpack bought! Hold the jump button in the air to fly.": "🚀 已购买喷气背包!在空中按住跳跃键即可飞行。", "🚀 Jetpack bought! Hold Space in the air to fly.": "🚀 已购买喷气背包!在空中按住空格键即可飞行。",
+
+  // арены
+  "Wave": "波次", "{0} defeated! Total: {1}": "{0}被击败!总计:{1}", "Wave {0}: {1} are coming!": "第 {0} 波:{1}来了!", "You lost 💀": "你输了 💀",
+  "You reached wave <b>{0}</b> and defeated <b>{1}</b> enemies.": "你到达了第 <b>{0}</b> 波,击败了 <b>{1}</b> 个敌人。", "Arena cleared! 🏆": "竞技场已清空!🏆",
+  "All {0} waves survived.<br>Enemies defeated: <b>{1}</b>": "成功挺过全部 {0} 波。<br>击败敌人:<b>{1}</b>", "Wave cleared! +25 health.": "这一波结束!生命值 +25。", "You fell — back to the arena.": "你掉下去了——回到竞技场。",
+
+  // Шашки
+  "Speed": "速度", "Acceleration": "加速", "Handling": "操控", "Go! 🏁": "出发!🏁", "Bang! You hit a wall!": "砰!你撞墙了!", "Bang! Crash!": "砰!撞车了!", "Oops! Bad weave!": "哎呀!没穿过去!", "Crunch! Be careful!": "咔嚓!小心点!",
+  "Finish! 🏁": "到达终点!🏁", "Car: <b>{0} {1}</b><br>Crashes: <b>{2}</b>": "车辆:<b>{0} {1}</b><br>事故:<b>{2}</b>", "km/h": "公里/小时",
+
+  // ЖК
+  "Who is it? Come in!": "谁呀?请进!", "Opening!": "这就开门!", "A courier? Come on in.": "是快递吗?进来吧。", "We are not expecting anyone…": "我们没在等人……", "I think you have the wrong flat.": "你好像按错门牌了。", "(no answer)": "(无人应答)",
+  "Ding-dong… Nobody is home.": "叮咚……家里没人。", "Who is it? Oh, not for us.": "谁呀?哦,不是找我们的。", "Woof woof! (a dog barks behind the door)": "汪汪!(门后有狗在叫)", "We are watching cartoons, come back later!": "我们在看动画片,晚点再来吧!",
+  "Grandma: I think you want another flat!": "奶奶:你要找的好像是别的房间!", "Shh! The baby is sleeping.": "嘘!宝宝在睡觉。",
+  "Dial a flat number and press Call.": "输入房号并按呼叫。", "Beep-beep! The entrance door is open.": "嘀嘀!单元门开了。", "Dial a flat number first.": "请先输入房号。", "✅ Code accepted!": "✅ 密码正确!",
+  "There is no flat {0}. Flats here are 1–{1}.": "没有 {0} 号房。这里的房号是 1–{1}。", "🔔 Calling flat {0}…": "🔔 正在呼叫 {0} 号房…", "No answer — this is your own flat! Use your key 🔑": "无人应答——这是你自己的家!用钥匙吧 🔑",
+  "Flat {0}: “{1}”": "{0} 号房:“{1}”", "Flat {0}": "{0} 号房", "🔑 Beep! The key fits.": "🔑 嘀!钥匙对上了。", "Now: floor {0}": "当前:{0} 楼", "Entrance 1 · flats 1–36": "1 单元 · 1–36 号房",
+  "Intercom": "门禁对讲", "Open the entrance door": "打开单元门", "Mail": "信箱", "Elevator buttons": "电梯按钮", "Call the elevator": "呼叫电梯", "Floor": "楼层", "Ring flat {0}": "按 {0} 号房的门铃",
+  "The door is open — come in!": "门开着——进来吧!", "Unlock flat 36 with your key": "用钥匙打开 36 号房", "🔑 Click! Your flat is open.": "🔑 咔哒!你家的门开了。", "Your flat 🏠": "你的家 🏠", "Welcome home! 🏠": "欢迎回家!🏠",
+  "You're home! +{0} B Backs. Keep exploring or go back to the menu.": "你到家了!+{0} B Backs。可以继续逛逛,或返回菜单。", "🛗 Ding! Floor {0}": "🛗 叮!{0} 楼", "🌳 Yard": "🌳 院子", "Elevator": "电梯", "🏠 You're home!": "🏠 你到家了!", "🎯 Flat 36, floor 9": "🎯 9 楼 36 号房",
+  "Your flat is No. 36 on floor 9. Open the entrance with the intercom (code 2580 or key 🔑).": "你的家是 9 楼 36 号。用门禁对讲打开单元门(密码 2580 或钥匙 🔑)。",
+};
+const ZH_TEMPLATES = Object.keys(ZH).filter(k => k.includes('{0}')).sort((a, b) => b.length - a.length).map(k => ({
+  re: new RegExp('^' + k.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{\d\}/g, '(.+?)') + '$'),
+  zh: ZH[k],
+}));
+const zhMissing = new Set();   // для отладки: тексты без перевода
+function zhOf(s) {
+  if (Array.isArray(s)) return s.map(zhOf);
+  if (ZH[s] !== undefined) return ZH[s];
+  for (const { re, zh } of ZH_TEMPLATES) {
+    const m = s.match(re);
+    if (m) return zh.replace(/\{(\d)\}/g, (_, i) => zhOf(m[+i + 1]));
+  }
+  if (/[A-Za-z]{2}/.test(s)) zhMissing.add(s);
+  return s;
+}
+const T = (ru, en) => (lang === 'ru' ? ru : lang === 'zh' ? zhOf(en) : en);
+const LANG_NAMES = { en: 'English', ru: 'Русский', zh: '中文' };
+function nextLang() {
+  const list = updated ? ['en', 'ru', 'zh'] : ['en', 'ru'];
+  return list[(list.indexOf(lang) + 1) % list.length];
+}
 // Телефон: сенсорное управление включается сразу или при первом касании экрана.
 let isTouch = false;
 function enableTouch() { isTouch = true; document.body.classList.add('touch'); }
@@ -450,16 +648,42 @@ function applyLang() {
     if (el.dataset.ruPh === undefined) el.dataset.ruPh = el.placeholder;
     el.placeholder = T(el.dataset.ruPh, el.dataset.enPh);
   }
-  for (const b of document.querySelectorAll('.lang-toggle')) b.textContent = T('🌐 English', '🌐 Русский');
+  for (const b of document.querySelectorAll('.lang-toggle')) b.textContent = `🌐 ${LANG_NAMES[nextLang()]}`;
+  applyTheme();
+}
+function applyTheme() {
+  document.body.classList.toggle('light', updated && theme === 'light');
+  $('updateBtn').hidden = updated;
+  $('themeBtn').hidden = !updated;
+  $('themeBtn').textContent = theme === 'light' ? T('🌙 Тёмная тема', '🌙 Dark theme') : T('☀️ Светлая тема', '☀️ Light theme');
 }
 function setLang(l) {
   lang = l;
-  try { localStorage.setItem('bworld_lang', l); } catch (e) {}
+  store.set('bworld_lang', l);
   applyLang();
   $('loginErr').textContent = '';
   if (user && state === 'menu') renderMenu();
 }
-for (const b of document.querySelectorAll('.lang-toggle')) b.onclick = () => setLang(T('en', 'ru'));
+for (const b of document.querySelectorAll('.lang-toggle')) b.onclick = () => setLang(nextLang());
+
+$('themeBtn').onclick = () => {
+  theme = theme === 'light' ? 'dark' : 'light';
+  store.set('bworld_theme', theme);
+  applyTheme();
+};
+const UPDATE_MS = 3000;
+$('updateBtn').onclick = () => {
+  $('updateBtn').hidden = true;
+  $('updating').classList.add('show');
+  requestAnimationFrame(() => requestAnimationFrame(() => $('updateFill').classList.add('go')));
+  setTimeout(() => {
+    updated = true;
+    store.set('bworld_updated', '1');
+    $('updating').classList.remove('show');
+    applyLang();
+    toast(T('Готово! Теперь можно менять тему и выбрать китайский язык.', 'Done! You can now change the theme and pick Chinese.'));
+  }, UPDATE_MS);
+};
 
 // ---------------------------------------------------------------------------
 // Версии и рейтинги контента
@@ -974,7 +1198,7 @@ function openDaily() {
   $('dailyDays').innerHTML = DAILY.map((v, i) => {
     const done = s.available ? i < s.day : i <= s.day;
     const today = i === s.day;
-    return `<div class="day${done ? ' done' : ''}${today ? ' today' : ''}">${T('День', 'Day')} ${i + 1}<div class="ic">${done ? '✅' : i === 6 ? '💎' : '💰'}</div><b>${v} ${CUR}</b></div>`;
+    return `<div class="day${done ? ' done' : ''}${today ? ' today' : ''}">${T(`День ${i + 1}`, `Day ${i + 1}`)}<div class="ic">${done ? '✅' : i === 6 ? '💎' : '💰'}</div><b>${v} ${CUR}</b></div>`;
   }).join('');
   if (s.available) {
     $('dailyText').innerHTML = T(`Заходи каждый день подряд — награда растёт! Сегодня: <b>${DAILY[s.day]} ${CUR}</b>`, `Come back every day in a row and the reward grows! Today: <b>${DAILY[s.day]} ${CUR}</b>`);
@@ -1042,7 +1266,7 @@ function renderMaps() {
     if (genreFilter === 'open' && blockedTags(m).length) return false;
     if (GENRES[genreFilter] && m.genre !== genreFilter) return false;
     if (!q) return true;
-    const hay = norm([m.name, m.desc, m.en, m.descEn, GENRES[m.genre], GENRES_EN[m.genre], ...m.tags.flatMap(t => [TAGS[t].label, TAGS[t].en])].join(' '));
+    const hay = norm([m.name, m.desc, m.en, m.descEn, mapName(m), mapDesc(m), GENRES[m.genre], GENRES_EN[m.genre], ...m.tags.flatMap(t => [TAGS[t].label, TAGS[t].en])].join(' '));
     return q.split(/\s+/).every(w => hay.includes(w));
   });
   $('mapsCount').textContent = T(`Найдено карт: ${list.length} из ${MAPS.length}`, `Maps found: ${list.length} of ${MAPS.length}`);
@@ -3424,7 +3648,7 @@ const saved = loadUser();
 if (saved) login(saved); else showScreen('login');
 
 // для отладки из консоли
-window.bworld = { get state() { return state; }, get W() { return W; }, get profile() { return profile; }, P, cam, MAPS,
+window.bworld = { zhMissing, get state() { return state; }, get W() { return W; }, get profile() { return profile; }, P, cam, MAPS,
                   startMap: id => startMap(MAPS.find(m => m.id === id)),
                   step: (n = 1, dt = 1 / 60) => { for (let i = 0; i < n && state === 'playing'; i++) tick(dt); } };
 </script>
